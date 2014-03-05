@@ -107,6 +107,8 @@ void loop()
       Serial.print("S:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
       powerEnable = false;
       lastTrigger = i;
+      powerL = 90;
+      powerR = 90;
       ST1.write(90);  //90 is "center" so that's 0 power
       ST2.write(90);
       break; //only need one to be over
