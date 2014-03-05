@@ -16,15 +16,16 @@ void setup() {
 
   background(0);
 
-  size(400, 200);
+  size(400, 100);
   frameRate(60);
   
   s = new Server(this, PORT); // Start a simple server on a port
   
   // find our arduino
   int i;
-  //while (!bSerialReady) {
+  while (!bSerialReady) {
     for (i=0; i<Serial.list().length; i++) {
+      println("Checking port: " + Serial.list()[i]); 
       if (Serial.list()[i].equals(theserial)) {
         infotext("Serial located at " + Serial.list()[i]);
         arduino = new Serial(this, Serial.list()[i], 115200);
@@ -34,13 +35,14 @@ void setup() {
     }
     if (!bSerialReady) {
       infotext("Serial not found, pausing 10 seconds before retry");
-    //  delay(10000);
+      delay(10000);
     } else {
       infotext("");
     }
-  //}
+  }
 
   fill(255);
+  textAlign(LEFT);
   text("Left Motor:", 0, 35);
   text("Right Motor:", 0, 55);
   text("Sensors (cm):", 0, 75);
@@ -90,46 +92,32 @@ void draw() {
 void serialEvent(Serial myPort) {
   String data[];
   String input;
-
-  input = myPort.readStringUntil('\n'); //iput will include \n
-  input = input.substring(0, input.length() - 2); //strip last character, zero indexed
-  println("\n" + "data: " + input);
-  data = split(input, ':');
-  if(data[0].equals("I")) {
-    infotext("Information:" + data[1]);
-  } else if(data[0].equals("E")) {
-    infotext("Error:" + data[1]);
-  } else if(data[0].equals("S")) {
-    if (data[1].equals("")) { //Stop is cleared
-      infoping(255, 0);
-    } else {
-      infoping(Integer.parseInt(data[2]), Integer.parseInt(data[3]));
+  
+  try {
+    input = myPort.readStringUntil('\n'); //iput will include \n
+    input = input.substring(0, input.length() - 2); //strip last character, zero indexed
+    infotext("");
+    data = split(input, ':');
+    if(data[0].equals("I")) {
+      infotext("Information:" + data[1]);
+    } else if(data[0].equals("E")) {
+      infotext("Error:" + data[1]);
+    } else if(data[0].equals("S")) {
+      if (data[1].equals("")) { //Stop is cleared
+        infoping(255, 0);
+      } else {
+        infoping(Integer.parseInt(data[1]), Integer.parseInt(data[2]));
+      }
+    } else if(data[0].equals("P")) {
+      infomotor(Integer.parseInt(data[1]), Integer.parseInt(data[3]), Integer.parseInt(data[2]), Integer.parseInt(data[4]));
+    } else if(data[0].equals("D")) {
+      if (data[1].equals("P")) {
+        infoping(Integer.parseInt(data[2]), Integer.parseInt(data[3]));
+      }
     }
-    print("Stopped:Sensor:");
-    print(data[1]);
-    print(":Distance:");
-    print(data[2]);
-    println("cm");
-  } else if(data[0].equals("P")) {
-    infomotor(Integer.parseInt(data[1]), Integer.parseInt(data[3]), Integer.parseInt(data[2]), Integer.parseInt(data[4]));
-    print("Power:L:");
-    print(data[1]);
-    print("<-");
-    print(data[3]);
-    print(":L:");
-    print(data[2]);
-    print("<-");
-    println(data[4]);
-  } else if(data[0].equals("D")) {
-    print("Debug:");
-    if (data[1].equals("P")) {
-      infoping(Integer.parseInt(data[2]), Integer.parseInt(data[3]));
-      print("Ping:Sensor:");
-      print(data[2]);
-      print(":Distance:");
-      print(data[3]);
-      println("cm");
-    }
+  } catch(Exception e) {
+    //println("serial exception");
+    //println(e);
   }
 }
 
@@ -142,38 +130,43 @@ void infotext(String text) {
 }
 
 void infomotor(int LT, int LA, int RT, int RA) {
-  int barOffset = textWidth("Right Motor:  ");  //start of bars
-  int barWidth = width - barOffset ; //max wdith
-  int bardot = barWidth/180; //pixels per power #
+  int barOffset = (int)textWidth("Right Motor:  ");  //start of bars
+  int barWidth = width - barOffset - 5 ; //max wdith
+  float bardot = barWidth/180.0; //pixels per power #
+  
+  //since 0 == full forward, inverse so forward goes to the right
+  LA = 180 - LA;
+  LT = 180 - LT;
+  RA = 180 - RA;
+  RT = 180 - RT;
   
   fill(0);
-  rect(barOffset, 20, width, 38);
-  rect(barOffset, 40, width, 58);
+  rect(barOffset, 20, width - barOffset, 18);
+  rect(barOffset, 40, width - barOffset, 18);
   fill(255);
-  text("Left Motor:", 0, 35);
-  text("Right Motor:", 0, 55);
   
-  rect(barOffset + (bardot*90), 20, barOffset + (barOffset*LA), 35);
-  rect(barOffset + (bardot*90), 40, barOffset + (barOffset*RA), 55);
+  rect(barOffset + (bardot*90), 20, ((bardot*LA) - (bardot*90)), 15);
+  rect(barOffset + (bardot*90), 40, ((bardot*RA) - (bardot*90)), 15);
   
-  fill(128);
-  rect(barOffset + (bardot*LT), 20, barOffset + 5 + (barOffset*LT), 35);
-  rect(barOffset + (bardot*RT), 40, barOffset + 5 + (barOffset*RT), 55);
-  
+  fill(255, 64, 0);
+  rect(barOffset + (bardot*LT), 20, 5, 15);
+  rect(barOffset + (bardot*RT), 40, 5, 15);
 }
 
 void infoping(int S, int cm) {
-  int pingOffset = textWidth("Sensors (cm):  ");  //start of display
-  int pingWidth = width - barOffset ; //max wdith
-  int pingSpacing = pingWidth/4; 
+  int pingOffset = (int)textWidth("Sensors (cm):  ");  //start of display
+  int pingWidth = width - pingOffset ; //max wdith
+  int pingSpacing = pingWidth/4;
   
-  if(S==255) { //clear whole area
+  S = 3 - S; //invert for display
+  
+  if(S < 0) { //clear whole area... invert makes the 255 negative
     fill(0);
-    rect(pingOffset, 60, width, 78);
+    rect(pingOffset, 60, width - pingOffset, 18);
   } else {
     fill(0);
-    rect(pingOffset + (S*pingSpacing), 60, pingOffset + ((S+1)*pingSpacing), 78);
+    rect(pingOffset + (S*pingSpacing), 60, pingSpacing, 18);
     fill(255);
-    text(cm, pingOffset + (S*pingSpacing), 75);
+    text(cm, pingOffset + 15 + (S*pingSpacing), 75);
   }
 }
