@@ -3,6 +3,8 @@ telebot
 
 Telepresence robot
 
-Arduino code targets Mega
+telebot.ino - Arduino code, targets Mega
 
-processing code acts as display and TCP server to serial relay
+telebotpc.pde - Processing code, acts as display and TCP server to serial relay
+
+telebotclient.pde - Processing code, client interface to direct the telebotpc server
