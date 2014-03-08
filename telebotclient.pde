@@ -198,9 +198,70 @@ void keyPressed() {
       DebugState = 1 - DebugState; //toggles between 0 and 1
       data = "D" + DebugState;
       break;
+   
+    default:
+      return; 
   }
   
-  if (data != "") {
-    c.write(data + "\n");
+  if (data == "") {
+    data = getMotorData(LastDirection);
   }
+  c.write(data + "\n");
+}
+
+void mouseReleased() {
+  String data = "";
+  int boxX, boxY;
+  boxX = boxStartX; 
+  boxY = boxStartY;
+
+  for (int i=1 ; i<=9 ; i++) {
+    if(mouseX > boxX && mouseX < boxX + boxW &&
+       mouseY > boxY && mouseY < boxY + boxH) {
+      LastDirection = i;
+      data = getMotorData(LastDirection);
+      c.write(data + "\n");
+    }
+
+    if(i % 3 == 0) {
+      boxX = boxStartX;
+      boxY += (boxH + 5);
+    } else {
+      boxX += (boxW + 5);
+    }
+  }
+}
+
+String getMotorData(int Dir) {
+  String data = "";
+  switch(Dir) {
+    case 7:
+      data = "M1"; //motor move
+      break;
+    case 8:
+      data = "M2"; //motor move
+      break;
+    case 9:
+      data = "M3"; //motor move
+      break;
+    case 4:
+      data = "M4"; //motor move
+      break;
+    case 5:
+      data = "M5"; //motor move
+      break;
+    case 6:
+      data = "M6"; //motor move
+      break;
+    case 1:
+      data = "M7"; //motor move
+      break;
+    case 2:
+      data = "M8"; //motor move
+      break;
+    case 3:
+      data = "M9"; //motor move
+      break;
+  }
+  return data;
 }
