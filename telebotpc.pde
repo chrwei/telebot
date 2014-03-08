@@ -6,9 +6,10 @@ Server s;
 Client c;
 
 // -- ARDUINO -- //
+boolean bDebugNoSerial = false;
 Serial arduino;
 boolean bSerialReady = false;
-String theserial = "COM7"; // TODO: port of your arduino
+String theserial = "/dev/ttyACM0"; // TODO: port of your arduino
 
 void setup() {
   PFont myFont = createFont("Arial", 14);
@@ -21,26 +22,28 @@ void setup() {
   
   s = new Server(this, PORT); // Start a simple server on a port
   
-  // find our arduino
-  int i;
-  while (!bSerialReady) {
-    for (i=0; i<Serial.list().length; i++) {
-      println("Checking port: " + Serial.list()[i]); 
-      if (Serial.list()[i].equals(theserial)) {
-        infotext("Serial located at " + Serial.list()[i]);
-        arduino = new Serial(this, Serial.list()[i], 115200);
-        bSerialReady = true;
-        break;
+  if(!bDebugNoSerial) {
+    // find our arduino
+    int i;
+    while (!bSerialReady) {
+      for (i=0; i<Serial.list().length; i++) {
+        println("Checking port: " + Serial.list()[i]); 
+        if (Serial.list()[i].equals(theserial)) {
+          infotext("Serial located at " + Serial.list()[i]);
+          arduino = new Serial(this, Serial.list()[i], 115200);
+          bSerialReady = true;
+          break;
+        }
+      }
+      if (!bSerialReady) {
+        infotext("Serial not found, pausing 10 seconds before retry");
+        delay(10000);
+      } else {
+        infotext("");
       }
     }
-    if (!bSerialReady) {
-      infotext("Serial not found, pausing 10 seconds before retry");
-      delay(10000);
-    } else {
-      infotext("");
-    }
   }
-
+  
   fill(255);
   textAlign(LEFT);
   text("Left Motor:", 0, 35);
@@ -64,11 +67,11 @@ void draw() {
   if (c != null) {
     if (c.available() > 0) {
       data = c.readString();
-      println("\n" + "data: " + data);
+      println("\n" + "data: " + data + ";");
       // parse the message
       if(data.substring(0, 1).equals("M")) {
         // motor command, send data packat to ardunio as is
-        infotext("Motor Command");
+        infotext("Motor Command " + data);
         if (bSerialReady) 
           arduino.write(data);
         else
@@ -170,3 +173,4 @@ void infoping(int S, int cm) {
     text(cm, pingOffset + 15 + (S*pingSpacing), 75);
   }
 }
+
