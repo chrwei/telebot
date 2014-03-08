@@ -39,7 +39,7 @@ outputs, ":" delimited for everything, newline terminated
 #include <NewPing.h>
 
 #define MAX_DISTANCE 300 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
-#define MAX_SAFE 100      // max distance that it's OK to move
+#define MAX_SAFE 40      // max distance that it's OK to move
 
 #define NUM_PINGS 4
 
@@ -68,6 +68,7 @@ uint8_t powerL = 90;
 uint8_t powerR = 90;
 uint8_t powerLt = 90;
 uint8_t powerRt = 90;
+uint8_t maxPwr = 45;
 
 //big motor controller uses RC speed control emulation, so treat it like a servo
 Servo ST1, ST2; // We'll name the Sabertooth servo channel objects ST1 and ST2.
@@ -87,6 +88,7 @@ void setup() {
 
 void loop() 
 {
+  char cmd;
   if(pingNext < NUM_PINGS) {
     if (pingCurrent < NUM_PINGS) {
       sonar[pingCurrent].timer_stop();
@@ -105,12 +107,14 @@ void loop()
     if (sonar[i].ping_result / US_ROUNDTRIP_CM > 0 && sonar[i].ping_result / US_ROUNDTRIP_CM < MAX_SAFE) {
       //S is e-stop, format is S:sensor index:distance cm
       Serial.print("S:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
-      powerEnable = false;
-      lastTrigger = i;
-      powerL = 90;
-      powerR = 90;
-      ST1.write(90);  //90 is "center" so that's 0 power
-      ST2.write(90);
+      if(powerLt < 90 && powerRt < 90) {  //only when going forward
+        powerEnable = false;
+        lastTrigger = i;
+        powerL = 90;
+        powerR = 90;
+        ST1.write(90);  //90 is "center" so that's 0 power
+        ST2.write(90);
+      }
       break; //only need one to be over
     }
   }
@@ -121,40 +125,41 @@ void loop()
   
   if(Serial.available()) {            // Is data available from Internet
     //keys match number pad directions
-    switch(Serial.read()) { //read 1st byte
+    cmd = Serial.read();
+    switch(cmd) { //read 1st byte
       case 'M': //move
         switch(Serial.read()) { //read 2nd byte
           case '8': //Forward
-            powerLt = 0;
-            powerRt = 0;
+            powerLt = 90 - maxPwr;
+            powerRt = 90 - maxPwr;
             break;
           case '9': //Forward Right
-            powerLt = 0;
-            powerRt = 90;
+            powerLt = 90 - maxPwr;
+            powerRt = 90 - (maxPwr/2);
             break;
           case '6': //Right
-            powerLt = 0;
-            powerRt = 180;
+            powerLt = 90 - maxPwr;
+            powerRt = 90 + maxPwr;
             break;
           case '3': //Reverse Right
-            powerLt = 180;
-            powerRt = 90;
+            powerLt = 90 + maxPwr;
+            powerRt = 90 + (maxPwr/2);
             break;
           case '2': //Reverse
-            powerLt = 180;
-            powerRt = 180;
+            powerLt = 90 + maxPwr;
+            powerRt = 90 + maxPwr;
             break;
           case '1': //Reverse Left
-            powerLt = 90;
-            powerRt = 180;
+            powerLt = 90 + (maxPwr/2);
+            powerRt = 90 + maxPwr;
             break;
           case '4': //Left
-            powerLt = 180;
-            powerRt = 0;
+            powerLt = 90 + maxPwr;
+            powerRt = 90 - maxPwr;
             break;
           case '7': //Forward Left
-            powerLt = 90;
-            powerRt = 0;
+            powerLt = 90 - (maxPwr/2);
+            powerRt = 90 - maxPwr;
             break;
           case '5': //Stop
             powerLt = 90;
@@ -175,7 +180,7 @@ void loop()
         }
         break;
       default:
-        Serial.println("E:Invalid command");
+        Serial.print("E:Invalid command "); Serial.println(cmd);
         Serial.flush();
     }
   }
@@ -222,5 +227,6 @@ void echoCheck() { // timer's up, do next sensor
       pingNext = 0;
   }
 }
+
 
 
