@@ -1,17 +1,23 @@
 import processing.net.*;
 import processing.serial.*;
 
-int PORT = 8571; // TODO: tcp port (in server.js of the web app)
+int PORT = 8571; 
 Server s;
 Client c;
 
 // -- ARDUINO -- //
-boolean bDebugNoSerial = false;
+boolean bDebugNoSerial = true;
 Serial arduino;
 boolean bSerialReady = false;
-String theserial = "/dev/ttyACM0"; // TODO: port of your arduino
+String theserial = "COM7"; // TODO: port of your arduino
+
+StringDict lastData;
+int lastClientSend = 0;
+int clientSendDelay = 1000;
 
 void setup() {
+  lastData = new StringDict();
+
   PFont myFont = createFont("Arial", 14);
   textFont(myFont);
 
@@ -44,6 +50,8 @@ void setup() {
     }
   }
   
+  infotext("My IP is " + Server.ip());
+  
   fill(255);
   textAlign(LEFT);
   text("Left Motor:", 0, 35);
@@ -66,7 +74,7 @@ void draw() {
   c = s.available();
   if (c != null) {
     if (c.available() > 0) {
-      data = c.readString();
+      data = c.readStringUntil('\n'); //leave the \n on so we don't have to add it when writing to serial
       println("\n" + "data: " + data + ";");
       // parse the message
       if(data.substring(0, 1).equals("M")) {
@@ -75,7 +83,7 @@ void draw() {
         if (bSerialReady) 
           arduino.write(data);
         else
-          infotext("Serial not ready:" + data);
+          infotext("Serial not ready;" + data);
       } else if(data.substring(0, 1).equals("D")) {
         infotext("Debug Command");
         if(data.substring(1, 2).equals("0")) { //debug off, clear sensor area
@@ -84,11 +92,25 @@ void draw() {
         if (bSerialReady) 
           arduino.write(data);
         else
-          infotext("Serial not ready:" + data);   
+          infotext("Serial not ready;" + data);   
+      } else if(data.substring(0, 1).equals("P")) {
+        infotext("Program Command");
+        if (bSerialReady) 
+          arduino.write(data);
+        else
+          infotext("Serial not ready;" + data);   
       } else {
-        infotext("Unhandled Command");
+        infotext("Unhandled Command;" + data);
       }
     }
+  }
+  
+  if(millis() - lastClientSend > clientSendDelay) {
+    for(String k : lastData.keys()) {
+      s.write(k + ":" + lastData.get(k));
+      lastData.remove(k);
+    }
+    lastClientSend = millis();
   }
 }
 
@@ -130,6 +152,8 @@ void infotext(String text) {
   fill(255);
   textAlign(CENTER);
   text(text, width/2, 15);
+  
+  lastData.set("I", text);
 }
 
 void infomotor(int LT, int LA, int RT, int RA) {
@@ -154,6 +178,8 @@ void infomotor(int LT, int LA, int RT, int RA) {
   fill(255, 64, 0);
   rect(barOffset + (bardot*LT), 20, 5, 15);
   rect(barOffset + (bardot*RT), 40, 5, 15);
+  
+  lastData.set("P", "" + LT + ":" + RT + ":" + LA + ":" + RA);
 }
 
 void infoping(int S, int cm) {
@@ -166,11 +192,35 @@ void infoping(int S, int cm) {
   if(S < 0) { //clear whole area... invert makes the 255 negative
     fill(0);
     rect(pingOffset, 60, width - pingOffset, 18);
+    for(String k : lastData.keys()) {
+      if(k.substring(0, 1).equals("S")) { 
+        lastData.remove(k);
+      }
+    }
+    lastData.set("S:", "");
   } else {
     fill(0);
     rect(pingOffset + (S*pingSpacing), 60, pingSpacing, 18);
     fill(255);
     text(cm, pingOffset + 15 + (S*pingSpacing), 75);
+    
+    lastData.remove("S:"); //kill any empty
+    lastData.set("S:" + S, "" + cm);
   }
 }
 
+void keyPressed() {
+    case 'p':
+    case 'P':
+      infotext("Program Command");
+      if (bSerialReady) 
+        arduino.write("P1" + '\n');
+      else
+        infotext("Serial not ready;P1");   
+      break;
+      
+    default:
+      return; 
+  }
+
+}
