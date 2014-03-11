@@ -6,6 +6,14 @@ inputs, no delimiters:
   M - motor commands
     1-9 - directions match keyboard numberpad directions, 5 is STOP
     Example:  "M7" - go forward and left
+  P - program
+    0 - manual drive
+    1 - automatic
+  S - set speed.  does not take effect until the next motor move target is evaluated
+    1 - full speed
+    2 - 75%
+    3 - 50%
+    4 - 25%
   D - debug
     0 - none
     1 - ping sensor info
@@ -39,7 +47,8 @@ outputs, ":" delimited for everything, newline terminated
 #include <NewPing.h>
 
 #define MAX_DISTANCE 300 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
-#define MAX_SAFE 40      // max distance that it's OK to move
+#define MODE0_LIMIT 80      // max distance that it's OK to move
+#define MODE1_TURN 150
 
 #define NUM_PINGS 4
 
@@ -68,14 +77,22 @@ uint8_t powerL = 90;
 uint8_t powerR = 90;
 uint8_t powerLt = 90;
 uint8_t powerRt = 90;
-uint8_t maxPwr = 45;
+uint8_t maxPwr;
+
+
+uint8_t roverMode = 0;
 
 //big motor controller uses RC speed control emulation, so treat it like a servo
 Servo ST1, ST2; // We'll name the Sabertooth servo channel objects ST1 and ST2.
 
 void setup() {
   Serial.begin(115200);
-  Serial.print("I:starting...");
+  Serial.println("I:starting...");
+
+  //prime the speed
+  maxPwr = 90 * 0.50;
+  //maxPwr = 90;
+  
   //Set the 2 main motors up
   ST1.attach(44, 1000, 2000);
   ST2.attach(46, 1000, 2000);
@@ -88,7 +105,31 @@ void setup() {
 
 void loop() 
 {
-  char cmd;
+  pingCheck();
+  
+  switch(roverMode) {
+   case 0:
+    checkMode0();
+    break;
+   case 1:
+    checkMode1();
+    break;
+  }
+  
+  checkSerial();
+  
+  applyPower();
+}
+
+void echoCheck() { // timer's up, do next sensor
+  if(sonar[pingCurrent].check_timer() != 0) {
+    pingNext = pingCurrent + 1;
+    if (pingNext >= NUM_PINGS)
+      pingNext = 0;
+  }
+}
+
+void pingCheck() {
   if(pingNext < NUM_PINGS) {
     if (pingCurrent < NUM_PINGS) {
       sonar[pingCurrent].timer_stop();
@@ -97,14 +138,16 @@ void loop()
     pingNext = 255;
     sonar[pingCurrent].ping_timer(echoCheck); // Do the ping (processing continues, interrupt will call echoCheck to look for echo).
   }
-  
+}
+
+void checkMode0() { //simply halt if too close
   lastTrigger = 255;
   for (uint8_t i = 0; i < NUM_PINGS; i++) { // Loop through the sensors to see what's triggered
     if(pingDebug) {  //ping debug packet:  D:P:sensor index:distance cm
       Serial.print("D:P:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
     }
     
-    if (sonar[i].ping_result / US_ROUNDTRIP_CM > 0 && sonar[i].ping_result / US_ROUNDTRIP_CM < MAX_SAFE) {
+    if (sonar[i].ping_result / US_ROUNDTRIP_CM > 0 && sonar[i].ping_result / US_ROUNDTRIP_CM < MODE0_LIMIT) {
       //S is e-stop, format is S:sensor index:distance cm
       Serial.print("S:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
       if(powerLt < 90 && powerRt < 90) {  //only when going forward
@@ -122,8 +165,11 @@ void loop()
     powerEnable = true;
     Serial.println("S::"); //empty estop packet to clear it
   }
-  
+}
+
+void checkSerial() {
   if(Serial.available()) {            // Is data available from Internet
+    char cmd;
     //keys match number pad directions
     cmd = Serial.read();
     switch(cmd) { //read 1st byte
@@ -169,6 +215,34 @@ void loop()
             Serial.println("E:Invalid Move");
         }
         break;
+      case 'P': //program
+        switch(Serial.read()) { //read 2nd byte
+          case '0': //drive
+            roverMode = 0;
+            break;
+          case '1': //auto
+            roverMode = 1;
+            maxPwr = 90 * 0.25;
+            pingDebug = true;
+            break;
+        }
+        break;
+      case 'S': //speed
+        switch(Serial.read()) { //read 2nd byte
+          case '1': //100%
+            maxPwr = 90;
+            break;
+          case '2': //75%
+            maxPwr = 90 * 0.75;
+            break;
+          case '3': //50%
+            maxPwr = 90 * 0.50;
+            break;
+          case '4': //25%
+            maxPwr = 90 * 0.25;
+            break;
+        }
+        break;
       case 'D': //debug?
         switch(Serial.read()) { //read 2nd byte
           case '0':
@@ -184,7 +258,9 @@ void loop()
         Serial.flush();
     }
   }
+}
 
+void applyPower() {
   if (powerEnable) {
     ST1.write(powerL);
     ST2.write(powerR);
@@ -220,13 +296,63 @@ void loop()
   }
 }
 
-void echoCheck() { // timer's up, do next sensor
-  if(sonar[pingCurrent].check_timer() != 0) {
-    pingNext = pingCurrent + 1;
-    if (pingNext >= NUM_PINGS)
-      pingNext = 0;
+void checkMode1() {
+  boolean bAllClear = true;
+  lastTrigger = 255;
+  for (uint8_t i = 0; i < NUM_PINGS; i++) { // Loop through the sensors to see what's triggered
+    if(pingDebug) {  //ping debug packet:  D:P:sensor index:distance cm
+      Serial.print("D:P:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
+    }
+    
+    if (sonar[i].ping_result / US_ROUNDTRIP_CM > 0) {
+      if(sonar[i].ping_result / US_ROUNDTRIP_CM < MODE0_LIMIT) {
+        //not working, evasive action!
+         //full stop
+  /*      powerL = 90;
+        powerR = 90;
+        ST1.write(90);  
+        ST2.write(90);
+  */      //spin until clear?
+        switch(i) {
+          case 0: //left side, turn right
+          case 1: //left center, turn right
+            Serial.println("I:Turn Right Hard");
+            powerLt = 90 - maxPwr;
+            powerRt = 90 + maxPwr;
+            bAllClear = false;
+            break;
+          case 2: //right center, turn left
+          case 3: //right side, turn left
+            Serial.println("I:Turn Left Hard");
+            powerLt = 90 + maxPwr;
+            powerRt = 90 - maxPwr;
+            bAllClear = false;
+            break;
+        }
+      } else if (bAllClear && sonar[i].ping_result / US_ROUNDTRIP_CM > 0 && sonar[i].ping_result / US_ROUNDTRIP_CM < MODE1_TURN) {
+        //figure out what direction to gentle turn
+        switch(i) {
+          case 0: //left side, turn right
+          case 1: //left center, turn right
+            Serial.println("I:Turn Right");
+            powerLt = 90 - maxPwr;
+            powerRt = 90 - (maxPwr/2);
+            bAllClear = false;
+            break;
+          case 2: //right center, turn left
+          case 3: //right side, turn left
+            Serial.println("I:Turn Left");
+            powerLt = 90 - (maxPwr/2);
+            powerRt = 90 - maxPwr;
+            bAllClear = false;
+            break;
+        }
+      } else if (bAllClear) {
+       //clear, go forward
+        Serial.println("I:Forward");
+        powerRt = 90 - maxPwr;
+        powerLt = 90 - maxPwr;
+      }
+    }
   }
 }
-
-
-
