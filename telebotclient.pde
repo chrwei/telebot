@@ -1,8 +1,8 @@
 import processing.net.*;
 
 int PORT = 8571; // TODO: tcp port (in server.js of the web app)
-//String ServerIP = "192.168.1.124"; //bot PC
-String ServerIP = "127.0.0.1";
+String ServerIP = "192.168.1.125"; //bot PC
+//String ServerIP = "127.0.0.1";
 
 int DebugState = 0;
 Client c;
@@ -10,7 +10,7 @@ boolean clientConnected = false;
 
 int LastDirection = 6;
 int LastSpeed = 4;
-int boxW = 60; 
+int boxW = 60;
 int boxH = 60;
 int boxStartX = 10;
 int boxStartY = 65;
@@ -24,7 +24,7 @@ void setup() {
   textFont(myFont);
 
   int boxX, boxY;
-  boxW = (int)textWidth(" SPEED ") + 6; 
+  boxW = (int)textWidth(" SPEED ") + 6;
 
   size((boxW*4)+(boxSpace*3)+(boxStartX*2), 480); //width is 4 boxes, 3 spaces, and 2 borders
   background(0);
@@ -34,14 +34,14 @@ void setup() {
   text("Press Number or Letter", ((boxW*4)+(boxSpace*3)+(boxStartX*2))/2, 27);
   text("to pick direction", ((boxW*4)+(boxSpace*3)+(boxStartX*2))/2, 57);
 
-  boxX = boxStartX; 
+  boxX = boxStartX;
   boxY = boxStartY;
   for (int i=1 ; i<=12 ; i++) {
     fill(0);
     stroke(255);
     //button box
     rect(boxX, boxY, boxW, boxH);
-    
+
     //arrow and text, i is not in order of the text to display
     switch(i) {
      case 1:
@@ -130,7 +130,7 @@ void setup() {
   }
 
   infoY = boxY + 15;
-  motorLY = boxY + 35; 
+  motorLY = boxY + 35;
   motorRY = boxY + 55;
   sensY = boxY + 75;
 
@@ -147,7 +147,7 @@ void connectClient() {
   try {
     c = new Client(this, ServerIP, PORT); // Replace with your server's IP and port
     clientConnected = true;
-    println(c);
+    //println(c);
   } catch(Exception e){
     clientConnected = false;
   }
@@ -157,7 +157,7 @@ void draw() {
   String data[];
   String input;
   int boxX, boxY;
-  boxX = boxStartX; 
+  boxX = boxStartX;
   boxY = boxStartY;
   stroke(0);
   for (int i=1 ; i<=12 ; i++) {
@@ -171,7 +171,7 @@ void draw() {
      fill(0);
      ellipse(boxX + (boxW - padding), boxY+ (boxH/2) + 15, 7, 7);
    }
- 
+
     if(i % 4 == 0) {
       boxX = boxStartX;
       boxY += (boxH + boxSpace);
@@ -182,9 +182,16 @@ void draw() {
 
   if (c.available() > 0) {
     input = c.readStringUntil('\n');
+    println(input + '|');
+    if (input == null) return;
+    input = input.substring(0, input.length() - 1); //strip the \n
     data = split(input, ':');
     if(data[0].equals("I")) {
-      infotext(data[1]);
+      if (data.length == 1) {
+        infotext("");
+      } else {
+        infotext(data[1]);
+      }
     } else if(data[0].equals("S")) {
       if (data[1].equals("")) { //Stop is cleared
         infoping(255, 0);
@@ -194,12 +201,12 @@ void draw() {
     } else if(data[0].equals("P")) {
       infomotor(Integer.parseInt(data[1]), Integer.parseInt(data[3]), Integer.parseInt(data[2]), Integer.parseInt(data[4]));
     }
-  }    
+  }
 }
 
 void keyPressed() {
   String data = "";
-  
+
   switch(key) {
     case 'b':
     case 'B':
@@ -261,7 +268,7 @@ void keyPressed() {
       LastSpeed = 12; //match up to for loop that draws
       data = getMotorData(LastSpeed);
       break;
-    
+
     case 'd':
     case 'D':
       DebugState = 1 - DebugState; //toggles between 0 and 1
@@ -272,11 +279,15 @@ void keyPressed() {
     case 'P':
       data = "P1";
       break;
-      
+    case 'q':
+    case 'Q':
+      data = "P0";
+      break;
+
     default:
-      return; 
+      return;
   }
-  
+
   if (data == "") {
     data = getMotorData(LastDirection);
   }
@@ -298,7 +309,7 @@ void keyPressed() {
 void mouseReleased() {
   String data = "";
   int boxX, boxY;
-  boxX = boxStartX; 
+  boxX = boxStartX;
   boxY = boxStartY;
 
   for (int i=1 ; i<=12 ; i++) {
@@ -388,33 +399,27 @@ void infomotor(int LT, int LA, int RT, int RA) {
   int barOffset = (int)textWidth("Right Motor:  ");  //start of bars
   int barWidth = width - barOffset - 5 ; //max wdith
   float bardot = barWidth/180.0; //pixels per power #
-  
-  //since 0 == full forward, inverse so forward goes to the right
-  LA = 180 - LA;
-  LT = 180 - LT;
-  RA = 180 - RA;
-  RT = 180 - RT;
-  
+
   fill(0);
   rect(barOffset, motorLY-15, width - barOffset, 18);
   rect(barOffset, motorRY-15, width - barOffset, 18);
+
   fill(255);
-  
   rect(barOffset + (bardot*90), motorLY-15, ((bardot*LA) - (bardot*90)), 15);
-  rect(barOffset + (bardot*90), motorLY-15, ((bardot*RA) - (bardot*90)), 15);
-  
+  rect(barOffset + (bardot*90), motorRY-15, ((bardot*RA) - (bardot*90)), 15);
+
   fill(255, 64, 0);
   rect(barOffset + (bardot*LT), motorLY-15, 5, 15);
-  rect(barOffset + (bardot*RT), motorLY-15, 5, 15);
+  rect(barOffset + (bardot*RT), motorRY-15, 5, 15);
 }
 
 void infoping(int S, int cm) {
   int pingOffset = (int)textWidth("Sensors (cm):  ");  //start of display
   int pingWidth = width - pingOffset ; //max wdith
   int pingSpacing = pingWidth/4;
-  
+
   S = 3 - S; //invert for display
-  
+
   if(S < 0) { //clear whole area... invert makes the 255 negative
     fill(0);
     rect(pingOffset, sensY-15, width - pingOffset, 18);
@@ -425,3 +430,4 @@ void infoping(int S, int cm) {
     text(cm, pingOffset + 15 + (S*pingSpacing), sensY);
   }
 }
+
