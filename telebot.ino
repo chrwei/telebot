@@ -41,14 +41,14 @@ outputs, ":" delimited for everything, newline terminated
       integer - sensor index (0-based)
       integer - distance cm
       Example: "D:P:1:123" - debug ping, 2nd sensor at 123cm
-    
+
 */
 #include <Servo.h>
 #include <NewPing.h>
 
 #define MAX_DISTANCE 300 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
-#define MODE0_LIMIT 80      // max distance that it's OK to move
-#define MODE1_TURN 150
+#define MODE0_LIMIT 60      // max distance that it's OK to move
+#define MODE1_TURN 114
 
 #define NUM_PINGS 4
 
@@ -92,21 +92,21 @@ void setup() {
   //prime the speed
   maxPwr = 90 * 0.50;
   //maxPwr = 90;
-  
+
   //Set the 2 main motors up
   ST1.attach(44, 1000, 2000);
   ST2.attach(46, 1000, 2000);
 
   pingNext = 0;
-  
+
   delay(500);
   Serial.println("I:done!");
 }
 
-void loop() 
+void loop()
 {
   pingCheck();
-  
+
   switch(roverMode) {
    case 0:
     checkMode0();
@@ -115,9 +115,9 @@ void loop()
     checkMode1();
     break;
   }
-  
+
   checkSerial();
-  
+
   applyPower();
 }
 
@@ -146,7 +146,7 @@ void checkMode0() { //simply halt if too close
     if(pingDebug) {  //ping debug packet:  D:P:sensor index:distance cm
       Serial.print("D:P:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
     }
-    
+
     if (sonar[i].ping_result / US_ROUNDTRIP_CM > 0 && sonar[i].ping_result / US_ROUNDTRIP_CM < MODE0_LIMIT) {
       //S is e-stop, format is S:sensor index:distance cm
       Serial.print("S:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
@@ -219,6 +219,8 @@ void checkSerial() {
         switch(Serial.read()) { //read 2nd byte
           case '0': //drive
             roverMode = 0;
+            powerLt = 90;
+            powerRt = 90;
             break;
           case '1': //auto
             roverMode = 1;
@@ -264,7 +266,7 @@ void applyPower() {
   if (powerEnable) {
     ST1.write(powerL);
     ST2.write(powerR);
-    delay(15);   
+    delay(15);
     if(powerL != powerLt || powerR != powerRt) {
       //ramp power towards target
       //if slowing dowm, ramp faster by doing it 2 times, also this means we don't need to check for overshooting
@@ -282,8 +284,8 @@ void applyPower() {
       if(powerRt > powerR) powerR++;
       if(powerRt < powerR) powerR--;
       //power info format: P:left target:right target:left actual:right actual
-      Serial.print("P:"); Serial.print(powerLt); Serial.print(":"); Serial.print(powerRt); 
-      Serial.print(":"); Serial.print(powerL); Serial.print(":"); Serial.println(powerR); 
+      Serial.print("P:"); Serial.print(powerLt); Serial.print(":"); Serial.print(powerRt);
+      Serial.print(":"); Serial.print(powerL); Serial.print(":"); Serial.println(powerR);
     }
   } else {
     if(powerLt == 90 || powerRt == 90) {
@@ -303,16 +305,11 @@ void checkMode1() {
     if(pingDebug) {  //ping debug packet:  D:P:sensor index:distance cm
       Serial.print("D:P:"); Serial.print(i); Serial.print(":");Serial.println(sonar[i].ping_result / US_ROUNDTRIP_CM);
     }
-    
+
     if (sonar[i].ping_result / US_ROUNDTRIP_CM > 0) {
       if(sonar[i].ping_result / US_ROUNDTRIP_CM < MODE0_LIMIT) {
         //not working, evasive action!
-         //full stop
-  /*      powerL = 90;
-        powerR = 90;
-        ST1.write(90);  
-        ST2.write(90);
-  */      //spin until clear?
+        //spin until clear?
         switch(i) {
           case 0: //left side, turn right
           case 1: //left center, turn right
